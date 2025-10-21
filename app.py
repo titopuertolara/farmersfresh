@@ -8,14 +8,14 @@ import dash_bootstrap_components as dbc
 from datetime import datetime
 
 # Read the Excel file
-file_path = "/home/esteban/tio cesar/Farmer's Fresh^J LLC_Profit and Loss Yearly.xlsx"
+file_path = "Farmers FreshLLC_Profit and Loss Yearly.xlsx"
 df = pd.read_excel(file_path)
 
 # Clean data
 df = df.fillna(0)
 
 # Create summary by category and year
-years = ['2022', '2023', '2024', '2025']
+years = ['2022', '2023', '2024', '2025', '2026']
 
 # Calculate projections for 2026
 def calculate_projection(row):
@@ -45,7 +45,7 @@ def calculate_projection(row):
 df['2026_Projection'] = df.apply(calculate_projection, axis=1)
 
 # Aggregate by major categories
-category_summary = df.groupby('category')[['2023', '2024', '2025', '2026_Projection']].sum().reset_index()
+category_summary = df.groupby('category')[['2022', '2023', '2024', '2025', '2026_Projection']].sum().reset_index()
 
 # Calculate revenue and expenses
 revenue_categories = ['Income', 'Other income']
@@ -56,14 +56,14 @@ expense_categories = ['Cost of Goods Sold', 'Inventory Shrinkage', 'Expenses', '
 
 # Calculate yearly totals
 yearly_totals = {
-    'Year': ['2023', '2024', '2025', '2026 (Projected)'],
+    'Year': ['2022', '2023', '2024', '2025', '2026 (Projected)'],
     'Revenue': [],
     'Expenses': [],
     'Net Income': []
 }
 
-for year, year_label in zip(['2023', '2024', '2025', '2026_Projection'],
-                           ['2023', '2024', '2025', '2026 (Projected)']):
+for year, year_label in zip(['2022', '2023', '2024', '2025', '2026_Projection'],
+                           ['2022', '2023', '2024', '2025', '2026 (Projected)']):
     revenue = df[df['category'].isin(revenue_categories)][year].sum()
     expenses = df[df['category'].isin(expense_categories)][year].sum()
     net_income = revenue - expenses
@@ -117,12 +117,12 @@ def create_revenue_expense_chart():
     ))
 
     fig.update_layout(
-        title='Revenue vs Expenses (Historical & Projected)',
+        title='Revenue vs Expenses (2022-2026: Historical & Projected)',
         barmode='group',
         plot_bgcolor='white',
         paper_bgcolor='white',
         font=dict(family="Arial, sans-serif", size=12, color=colors['text']),
-        xaxis=dict(showgrid=False),
+        xaxis=dict(showgrid=False, title='Year'),
         yaxis=dict(title='Amount ($)', showgrid=True, gridcolor='#ecf0f1'),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode='x unified',
@@ -136,14 +136,14 @@ def create_net_income_chart():
     """Net Income trend with projection"""
     fig = go.Figure()
 
-    # Split historical and projected
-    historical_years = yearly_df['Year'][:3]
-    historical_income = yearly_df['Net Income'][:3]
-    projected_year = yearly_df['Year'][3:]
-    projected_income = yearly_df['Net Income'][3:]
+    # Split historical and projected (first 4 years are historical: 2022, 2023, 2024, 2025)
+    historical_years = yearly_df['Year'][:4]
+    historical_income = yearly_df['Net Income'][:4]
+    projected_year = yearly_df['Year'][4:]
+    projected_income = yearly_df['Net Income'][4:]
 
     fig.add_trace(go.Scatter(
-        name='Historical Net Income',
+        name='Historical Net Income (2022-2025)',
         x=historical_years,
         y=historical_income,
         mode='lines+markers+text',
@@ -159,7 +159,7 @@ def create_net_income_chart():
     all_income = list(historical_income) + list(projected_income)
 
     fig.add_trace(go.Scatter(
-        name='Projected Net Income',
+        name='Projected Net Income (2026)',
         x=all_years[-2:],
         y=all_income[-2:],
         mode='lines+markers+text',
@@ -171,11 +171,11 @@ def create_net_income_chart():
     ))
 
     fig.update_layout(
-        title='Net Income Trend & 2026 Projection',
+        title='Net Income Trend & 2026 Projection (2022-2026)',
         plot_bgcolor='white',
         paper_bgcolor='white',
         font=dict(family="Arial, sans-serif", size=12, color=colors['text']),
-        xaxis=dict(showgrid=False),
+        xaxis=dict(showgrid=False, title='Year'),
         yaxis=dict(title='Net Income ($)', showgrid=True, gridcolor='#ecf0f1', zeroline=True),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode='x unified',
@@ -245,8 +245,10 @@ def create_revenue_breakdown():
 def create_top_expenses_chart():
     """Top 10 expense items for 2025 and 2026 projection"""
     expense_items = df[df['category'].isin(expense_categories)].copy()
-    expense_items = expense_items[['Distribution account', '2025', '2026_Projection']]
-    expense_items = expense_items[(expense_items['2025'] > 0) | (expense_items['2026_Projection'] > 0)]
+    # Group by both category and distribution account to handle duplicates correctly
+    expense_items = expense_items.groupby(['category', 'Distribution account'])[['2025', '2026_Projection']].sum().reset_index()
+    # IMPORTANT: Only show items that have 2025 data to avoid mixing historical years
+    expense_items = expense_items[expense_items['2025'] > 0]
     expense_items['Total'] = expense_items['2025'] + expense_items['2026_Projection']
     expense_items = expense_items.sort_values('Total', ascending=False).head(10)
 
@@ -257,7 +259,10 @@ def create_top_expenses_chart():
         x=expense_items['Distribution account'],
         y=expense_items['2025'],
         marker_color='#e74c3c',  # Bright red for actual
-        hovertemplate='<b>%{x}</b><br>2025: $%{y:,.2f}<extra></extra>'
+        text=expense_items['2025'].apply(lambda x: f'${x:,.0f}'),
+        textposition='outside',
+        hovertemplate='<b>%{x}</b><br>Category: ' + expense_items['category'] + '<br>2025: $%{y:,.2f}<extra></extra>',
+        customdata=expense_items['category']
     ))
 
     fig.add_trace(go.Bar(
@@ -265,7 +270,10 @@ def create_top_expenses_chart():
         x=expense_items['Distribution account'],
         y=expense_items['2026_Projection'],
         marker_color='#3498db',  # Blue for projection
-        hovertemplate='<b>%{x}</b><br>2026 Proj: $%{y:,.2f}<extra></extra>'
+        text=expense_items['2026_Projection'].apply(lambda x: f'${x:,.0f}'),
+        textposition='outside',
+        hovertemplate='<b>%{x}</b><br>Category: ' + expense_items['category'] + '<br>2026 Proj: $%{y:,.2f}<extra></extra>',
+        customdata=expense_items['category']
     ))
 
     fig.update_layout(
@@ -289,26 +297,42 @@ def create_profit_margin_chart():
 
     fig = go.Figure()
 
+    # Historical data (2022-2025)
     fig.add_trace(go.Scatter(
-        x=yearly_df['Year'],
-        y=yearly_df['Profit Margin (%)'],
+        name='Historical Profit Margin',
+        x=yearly_df['Year'][:4],
+        y=yearly_df['Profit Margin (%)'][:4],
         mode='lines+markers+text',
         line=dict(color=colors['primary'], width=3),
-        marker=dict(size=12),
-        text=yearly_df['Profit Margin (%)'].apply(lambda x: f'{x:.1f}%'),
+        marker=dict(size=12, symbol='circle'),
+        text=yearly_df['Profit Margin (%)'][:4].apply(lambda x: f'{x:.1f}%'),
         textposition='top center',
         fill='tozeroy',
         fillcolor='rgba(52, 152, 219, 0.1)',
         hovertemplate='<b>Profit Margin</b><br>%{x}<br>%{y:.2f}%<extra></extra>'
     ))
 
+    # Projected data (2025-2026 connection)
+    fig.add_trace(go.Scatter(
+        name='Projected Profit Margin',
+        x=[yearly_df['Year'].iloc[3], yearly_df['Year'].iloc[4]],
+        y=[yearly_df['Profit Margin (%)'].iloc[3], yearly_df['Profit Margin (%)'].iloc[4]],
+        mode='lines+markers+text',
+        line=dict(color=colors['warning'], width=3, dash='dash'),
+        marker=dict(size=12, symbol='diamond'),
+        text=['', f'{yearly_df["Profit Margin (%)"].iloc[4]:.1f}%'],
+        textposition='top center',
+        hovertemplate='<b>Projected Profit Margin</b><br>%{x}<br>%{y:.2f}%<extra></extra>'
+    ))
+
     fig.update_layout(
-        title='Profit Margin Trend',
+        title='Profit Margin Trend (2022-2026)',
         plot_bgcolor='white',
         paper_bgcolor='white',
         font=dict(family="Arial, sans-serif", size=12, color=colors['text']),
-        xaxis=dict(showgrid=False),
+        xaxis=dict(showgrid=False, title='Year'),
         yaxis=dict(title='Profit Margin (%)', showgrid=True, gridcolor='#ecf0f1'),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=350,
         margin=dict(l=60, r=40, t=80, b=60)
     )
