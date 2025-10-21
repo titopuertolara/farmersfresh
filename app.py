@@ -76,7 +76,7 @@ yearly_df = pd.DataFrame(yearly_totals)
 
 # Initialize Dash app with Bootstrap theme
 app = Dash(__name__, external_stylesheets=[dbc.themes.LUX])
-
+server = app.server
 # Define color scheme
 colors = {
     'background': '#f8f9fa',
